@@ -1,0 +1,85 @@
+#!/usr/bin/perl
+# Edward Lee, elee44@ucsc.edu, CMPS 112, Fall 2018, ASG4
+use strict;
+use warnings;
+use Data::Dumper;
+use Getopt::Std;
+my %options = ();
+my $rowiteration = 1;
+my %macros = ();
+my %commands = ();
+my %prerequisites = ();
+my $currentcommand = 'null';
+getopts("d", \%options);
+if(defined $options{d}){
+    print "Debug mode on\n";
+}
+my $makefile = 'Makefile';
+open(my $fh, $makefile)
+    or die "failed to open Makefile, exiting\n";
+while (my $row = <$fh>){
+    if (index($row, "=") != -1){
+        print "line $rowiteration defines macros, parsing\n" if defined $options{d};
+        my @linesplit = split('= ', $row, 2);
+        my $iterationstring = trim($linesplit[0]);
+        $iterationstring = ('$(' . $iterationstring . ')');
+        my $istring2 = trim($linesplit[1]);
+        $macros{$iterationstring} = $istring2;
+    }
+    if (index($row, ":") != -1){
+        print "line $rowiteration defines commands, parsing\n" if defined $options{d};
+        my @linesplit = split(':', $row, 2);
+        $currentcommand = trim($linesplit[0]);
+        $prerequisites{$currentcommand} = trim($linesplit[1]);
+    }
+    if (index($row, '	') != -1){
+        $commands{$currentcommand} = trim($row);
+    }
+    $rowiteration = $rowiteration + 1;
+}
+if(defined $options{d}){
+    print "\nDisplaying contents of macro hash\n";
+    print Dumper(\%macros);
+    print "\nDisplaying contents of prerequisites hash\n";
+    print Dumper(\%prerequisites);
+    print "\nDisplaying contents of commands hash\n";
+    print Dumper(\%commands);
+    print "\n";
+}
+my $makecommand = $ARGV[0];
+if (not defined $makecommand) {
+    die "No make command specified. Exiting\n"
+}
+my @prereqstrings = replaceMacros($prerequisites{$makecommand}, \%macros);
+if (@prereqstrings){
+    print "Checking prerequisites on files: @prereqstrings\n" if defined $options{d};
+    foreach my $prereqfiles (@prereqstrings) {
+        open(my $file, $prereqfiles)
+            or die "prerequisite $prereqfiles failed, exiting\n";
+    }
+} else {
+    print "No prerequisites to check\n" if defined $options{d};
+}
+my @shellcommands = replaceMacros($commands{$makecommand}, \%macros);
+print "Executing the following commands: @shellcommands\n" if defined $options{d};
+system(@shellcommands);
+print "Runtime complete. Have a nice day.\n" if defined $options{d};
+
+sub replaceMacros {
+    if (not defined $_[0]){
+        return;
+    }
+    my @splitString = split(' ', $_[0]);
+    my %macro = %{$_[1]};
+    my $i = 0;
+    foreach my $prereq (@splitString) {
+        if (exists ($macro{$prereq})) {
+            $splitString[$i] = $macro{$prereq};
+        } else {
+            $splitString[$i] = $prereq;
+        }
+        $i++;
+    }
+    return @splitString;
+}
+sub trim { my $s = shift; $s =~ s/^\s+|\s+$//g; return $s };
